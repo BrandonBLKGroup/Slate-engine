@@ -1,4 +1,4 @@
- const express = require('express');
+const express = require('express');
 const puppeteer = require('puppeteer');
 const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
@@ -310,15 +310,10 @@ app.post('/render-graphic', async (req, res) => {
     console.log(`[GRAPHIC] Client:`, client ? client.first_name : 'NOT FOUND');
 
     // 4. Get photos
-    const { data: photoRows } = await sb.from('listing_photos').select('*').eq('listing_id', listing.id).order('created_at', { ascending: false }).limit(1);
+    const { data: photoRows } = await sb.from('listing_photos').select('*').eq('listing_id', listing.id).order('photo_order', { ascending: true });
     let photos = [];
     if (photoRows && photoRows.length > 0) {
-      const pr = photoRows[0];
-      photos = [pr.photo_url_1, pr.photo_url_2, pr.photo_url_3, pr.photo_url_4].filter(Boolean);
-    }
-    if (photos.length === 0) {
-      // Fallback: check listing table for photo URLs
-      photos = [listing.photo_url_1, listing.photo_url_2, listing.photo_url_3, listing.photo_url_4].filter(Boolean);
+      photos = photoRows.map(pr => pr.photo_url).filter(Boolean);
     }
 
     // 5. Determine template
@@ -468,9 +463,9 @@ app.post('/render-video', async (req, res) => {
     // 2. Get photos (from video_requests.photo_urls or listing)
     let photos = video.photo_urls || [];
     if (photos.length === 0 && video.listing_id) {
-      const { data: photoRows } = await sb.from('listing_photos').select('*').eq('listing_id', video.listing_id).order('created_at', { ascending: false }).limit(1);
-      if (photoRows && photoRows[0]) {
-        photos = [photoRows[0].photo_url_1, photoRows[0].photo_url_2, photoRows[0].photo_url_3, photoRows[0].photo_url_4].filter(Boolean);
+      const { data: photoRows } = await sb.from('listing_photos').select('*').eq('listing_id', video.listing_id).order('photo_order', { ascending: true });
+      if (photoRows && photoRows.length > 0) {
+        photos = photoRows.map(pr => pr.photo_url).filter(Boolean);
       }
     }
 
