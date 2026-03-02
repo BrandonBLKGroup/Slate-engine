@@ -1,6 +1,5 @@
 FROM node:20-slim
 
-# Install Chromium dependencies + FFmpeg
 RUN apt-get update && apt-get install -y \
   chromium \
   ffmpeg \
@@ -21,14 +20,13 @@ RUN apt-get update && apt-get install -y \
   --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
-COPY package.json .
+COPY package.json /app/package.json
 RUN npm install --production
-COPY . .
+COPY server.js /app/server.js
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "/app/server.js"]
