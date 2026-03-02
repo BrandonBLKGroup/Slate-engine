@@ -1,0 +1,17 @@
+{
+  "name": "slate-engine",
+  "version": "1.0.0",
+  "description": "Slate Social - Automated Graphics & Video Engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "express": "^4.18.2",
+    "puppeteer": "^21.6.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "node-fetch": "^2.7.0",
+    "sharp": "^0.33.0"
+  }
+}
