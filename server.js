@@ -233,28 +233,107 @@ app.post('/render-graphic', async (req, res) => {
 
     // 5. Determine template
     const template = client?.template_style || 'bold_dark';
+    console.log(`[GRAPHIC] Template style: ${template}`);
 
-    // 6. Check if this is a Spartan 2 (BLK custom) client
-    if (template === 'blk_custom') {
-      // Route to Spartan 2 service instead
-      console.log(`[GRAPHIC] Routing to Spartan 2 for BLK custom template`);
+    // 6. Check for custom uploaded design
+    const { data: customDesigns } = await sb.from('client_designs').select('*').eq('client_id', graphic.client_id).order('created_at', { ascending: false }).limit(1);
+    const hasCustomDesign = (customDesigns && customDesigns.length > 0);
+    
+    if (hasCustomDesign || template === 'blk_custom' || template === 'custom_upload') {
+      console.log(`[GRAPHIC] Using custom design rendering (Sharp compositing)`);
       try {
-        const spartan2Url = process.env.SPARTAN2_URL || 'https://gunicorn-app-production-c290.up.railway.app';
-        const s2res = await fetch(`${spartan2Url}/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ listing, photos, graphic_type: graphic.graphic_type }),
-          timeout: 120000
-        });
-        if (s2res.ok) {
-          const s2data = await s2res.json();
-          if (s2data.file_url) {
-            await sb.from('graphics').update({ file_url: s2data.file_url, status: 'ready' }).eq('id', graphic_id);
-            return res.json({ success: true, file_url: s2data.file_url, engine: 'spartan2' });
-          }
+        // Get the custom design image URL
+        let designUrl = null;
+        if (hasCustomDesign) {
+          designUrl = customDesigns[0].image_url;
         }
-      } catch (s2err) {
-        console.log(`[GRAPHIC] Spartan 2 failed, falling back to HTML render:`, s2err.message);
+        
+        if (designUrl) {
+          console.log(`[GRAPHIC] Fetching custom design: ${designUrl}`);
+          const designRes = await fetch(designUrl);
+          const designBuf = Buffer.from(await designRes.arrayBuffer());
+          
+          // Resize design to 1200x1200
+          let base = await sharp(designBuf).resize(1200, 1200, { fit: 'cover' }).png().toBuffer();
+          
+          // Download listing photos
+          const photoBuffers = [];
+          for (let i = 0; i < Math.min(photos.length, 4); i++) {
+            try {
+              const pRes = await fetch(photos[i]);
+              const pBuf = Buffer.from(await pRes.arrayBuffer());
+              photoBuffers.push(pBuf);
+            } catch (pe) { console.log(`[GRAPHIC] Photo ${i} fetch failed:`, pe.message); }
+          }
+          
+          // Composite: photos in top area, text bar at bottom
+          const composites = [];
+          
+          // Photo grid in top 60% of image (y: 80 to 800)
+          if (photoBuffers.length >= 1) {
+            const heroPhoto = await sharp(photoBuffers[0]).resize(1120, 680, { fit: 'cover' }).png().toBuffer();
+            composites.push({ input: heroPhoto, left: 40, top: 100 });
+          }
+          if (photoBuffers.length >= 4) {
+            // 4-photo grid: top-left hero, then 3 smaller
+            const p1 = await sharp(photoBuffers[0]).resize(660, 380, { fit: 'cover' }).png().toBuffer();
+            const p2 = await sharp(photoBuffers[1]).resize(460, 380, { fit: 'cover' }).png().toBuffer();
+            const p3 = await sharp(photoBuffers[2]).resize(460, 280, { fit: 'cover' }).png().toBuffer();
+            const p4 = await sharp(photoBuffers[3]).resize(660, 280, { fit: 'cover' }).png().toBuffer();
+            composites.length = 0; // Clear hero
+            composites.push({ input: p1, left: 40, top: 100 });
+            composites.push({ input: p2, left: 710, top: 100 });
+            composites.push({ input: p3, left: 710, top: 490 });
+            composites.push({ input: p4, left: 40, top: 490 });
+          }
+          
+          // Create text overlay bar
+          const graphicType = (graphic.graphic_type || 'just_listed').replace(/_/g, ' ').toUpperCase();
+          const addr = listing.street || '';
+          const city = listing.city || '';
+          const specs = `${listing.beds || '—'} BD  ·  ${listing.baths || '—'} BA  ·  ${(listing.sqft || 0).toLocaleString()} SQFT`;
+          const price = `$${(listing.price || 0).toLocaleString()}`;
+          
+          const textBar = Buffer.from(`<svg width="1200" height="280">
+            <rect x="0" y="0" width="1200" height="280" fill="rgba(0,0,0,0.75)" rx="0"/>
+            <text x="60" y="45" font-family="Arial,sans-serif" font-size="20" font-weight="bold" letter-spacing="3" fill="#C8A55C">${graphicType}</text>
+            <text x="60" y="110" font-family="Georgia,serif" font-size="58" font-weight="bold" fill="#FFFFFF">${addr}</text>
+            <text x="60" y="160" font-family="Georgia,serif" font-size="34" fill="rgba(255,255,255,0.7)">${city}, ${listing.state || ''}</text>
+            <text x="60" y="210" font-family="Arial,sans-serif" font-size="18" fill="#C8A55C">${specs}</text>
+            <text x="60" y="245" font-family="Arial,sans-serif" font-size="24" font-weight="bold" fill="#C8A55C">${price}</text>
+          </svg>`);
+          composites.push({ input: textBar, left: 0, top: 860 });
+          
+          // Brokerage bar
+          const bName = client?.brokerage || '';
+          const bLicense = client?.license_number || '';
+          const bDisclaimer = client?.brokerage_disclaimer || 'Equal Housing Opportunity';
+          const brokerBar = Buffer.from(`<svg width="1200" height="50">
+            <rect x="0" y="0" width="1200" height="50" fill="#111111"/>
+            <text x="30" y="32" font-family="Arial,sans-serif" font-size="13" fill="#cccccc">${bName}${bLicense ? ' · #' + bLicense : ''}</text>
+            <text x="1170" y="32" font-family="Arial,sans-serif" font-size="10" fill="#888888" text-anchor="end">${bDisclaimer}</text>
+          </svg>`);
+          composites.push({ input: brokerBar, left: 0, top: 1150 });
+          
+          // Composite everything
+          const finalImage = await sharp(base).composite(composites).png({ quality: 90 }).toBuffer();
+          
+          // Upload
+          const filename = `${graphic.client_id}/graphics/${graphic_id}.png`;
+          const { error: upErr } = await sb.storage.from('listing-photos').upload(filename, finalImage, { contentType: 'image/png', upsert: true });
+          if (upErr) throw new Error('Upload failed: ' + upErr.message);
+          
+          const fileUrl = `${SUPA_URL}/storage/v1/object/public/listing-photos/${filename}`;
+          await sb.from('graphics').update({ file_url: fileUrl, status: 'ready' }).eq('id', graphic_id);
+          
+          console.log(`[GRAPHIC] Custom design done! ${fileUrl}`);
+          return res.json({ success: true, file_url: fileUrl, engine: 'custom_sharp' });
+        } else {
+          console.log(`[GRAPHIC] No custom design URL found, falling back to HTML render`);
+        }
+      } catch (custErr) {
+        console.error(`[GRAPHIC] Custom design error:`, custErr.message);
+        console.log(`[GRAPHIC] Falling back to HTML render`);
       }
     }
 
