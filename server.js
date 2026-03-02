@@ -1,4 +1,4 @@
-const express = require('express');
+ const express = require('express');
 const puppeteer = require('puppeteer');
 const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
@@ -25,6 +25,7 @@ console.log('[INIT] Chromium path:', process.env.PUPPETEER_EXECUTABLE_PATH || '/
 // TEMPLATE DEFINITIONS (match portal exactly)
 // ═══════════════════════════════════════════
 const TEMPLATES = {
+  blk_custom: { bg: '#FFFFFF', text: '#1a1a1a', accent: '#000', layout: 'blk_custom' },
   bold_dark: { bg: '#111', text: '#fff', accent: '#C8A55C', layout: 'hero_bottom' },
   clean_minimal: { bg: '#FAFAFA', text: '#222', accent: '#999', layout: 'photo_top' },
   luxury_gold: { bg: '#1A1510', text: '#F5ECD7', accent: '#D4AF37', layout: 'split_left' },
@@ -65,6 +66,52 @@ function generateGraphicHTML(listing, template, photos, brokerage, graphicType) 
     </div>`;
 
   const layouts = {
+    blk_custom: `
+      <div style="width:1200px;height:1200px;background:#fff;position:relative;overflow:hidden;font-family:'DM Sans',sans-serif;">
+        <!-- Top specs bar -->
+        <div style="display:flex;align-items:center;padding:20px 40px 15px;gap:10px;">
+          <div style="display:flex;align-items:center;gap:30px;">
+            <div style="text-align:center;"><div style="font-size:11px;letter-spacing:2px;color:#333;font-weight:300;">${listing.beds || '—'} BEDROOMS</div></div>
+            <div style="text-align:center;"><div style="font-size:11px;letter-spacing:2px;color:#333;font-weight:300;">${listing.baths || '—'} BATHROOMS</div></div>
+            <div style="text-align:center;"><div style="font-size:11px;letter-spacing:2px;color:#333;font-weight:300;">${(listing.sqft || 0).toLocaleString()} SQUARE FEET</div></div>
+            <div style="text-align:center;"><div style="font-size:11px;letter-spacing:2px;color:#333;font-weight:300;">$${(listing.price || 0).toLocaleString()} DOLLARS</div></div>
+          </div>
+          <div style="margin-left:auto;font-family:'Georgia',serif;font-size:42px;font-style:italic;color:#1a1a1a;">${type === 'JUST LISTED' ? 'Just Listed!' : type === 'UNDER CONTRACT' ? 'Under Contract!' : type === 'PRICE CHANGE' ? 'New Price!' : type === 'SOLD' ? 'Sold!' : type}</div>
+        </div>
+        <!-- Photo grid -->
+        <div style="display:grid;grid-template-columns:540px 1fr;gap:8px;padding:0 8px;height:730px;">
+          <!-- Left column: 2 stacked photos -->
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <img src="${photo1}" style="width:100%;height:50%;object-fit:cover;">
+            <img src="${photo2}" style="width:100%;height:50%;object-fit:cover;">
+          </div>
+          <!-- Right column: photo, logo block, photo -->
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <img src="${photo3}" style="width:100%;height:200px;object-fit:cover;">
+            <div style="background:#000;display:flex;align-items:center;justify-content:center;flex:1;padding:20px;">
+              <div style="text-align:center;">
+                <div style="font-family:'DM Sans',sans-serif;color:#fff;font-size:48px;font-weight:700;letter-spacing:3px;">lpt realty</div>
+                <div style="font-family:'DM Sans',sans-serif;color:#fff;font-size:16px;letter-spacing:6px;font-weight:300;">LISTING POWER TOOLS</div>
+              </div>
+            </div>
+            <img src="${photo4}" style="width:100%;height:200px;object-fit:cover;">
+          </div>
+        </div>
+        <!-- Bottom section -->
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:20px 40px 15px;">
+          <div>
+            <div style="font-family:'DM Serif Display',serif;font-size:52px;color:#1a1a1a;font-weight:700;line-height:1.1;"><span style="font-weight:800;">${(addr.match(/^\d+/) || [''])[0]}</span> ${addr.replace(/^\d+\s*/, '')}</div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:22px;letter-spacing:6px;color:#555;text-transform:uppercase;margin-top:4px;">${city}, ${listing.state || 'AR'}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="width:120px;height:120px;background:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <span style="color:#fff;font-size:42px;font-weight:800;font-family:'DM Sans',sans-serif;">BLK</span>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:right;padding:0 40px 10px;font-family:'DM Sans',sans-serif;font-size:13px;letter-spacing:3px;color:#333;">MAKEARKANSASHOME.COM</div>
+      </div>`,
+
     hero_bottom: `
       <div style="width:1200px;height:1200px;background:${t.bg};position:relative;overflow:hidden;font-family:'DM Sans',sans-serif;">
         <img src="${photo1}" style="width:1200px;height:780px;object-fit:cover;">
@@ -185,13 +232,56 @@ function generateGraphicHTML(listing, template, photos, brokerage, graphicType) 
         </div>
         ${brokerageBar}
       </div>`,
+
+    blk_custom: `
+      <div style="width:1200px;height:1200px;background:#FFFFFF;position:relative;overflow:hidden;font-family:'Outfit',sans-serif;">
+        <!-- Graphic type header top-right -->
+        <div style="position:absolute;top:30px;right:40px;font-size:28px;font-weight:700;color:#111;letter-spacing:2px;z-index:10;">${type}</div>
+        <!-- Specs bar -->
+        <div style="position:absolute;top:83px;left:45px;right:45px;display:flex;gap:20px;">
+          <span style="font-size:14px;letter-spacing:3px;color:#555;font-weight:300;text-transform:uppercase;">${listing.beds || '—'} BEDROOMS</span>
+          <span style="font-size:14px;letter-spacing:3px;color:#555;font-weight:300;text-transform:uppercase;">${listing.baths || '—'} BATHROOMS</span>
+          <span style="font-size:14px;letter-spacing:3px;color:#555;font-weight:300;text-transform:uppercase;">${(listing.sqft || 0).toLocaleString()} SQFT</span>
+          <span style="font-size:14px;letter-spacing:3px;color:#555;font-weight:300;text-transform:uppercase;">${price}</span>
+        </div>
+        <!-- Photo grid area y:130 to y:935 -->
+        <div style="position:absolute;top:130px;left:0;right:0;height:805px;background:#fff;">
+          <!-- Top-left hero: 0,160 670x400 -->
+          <img src="${photo1}" style="position:absolute;left:0;top:30px;width:670px;height:400px;object-fit:cover;">
+          <!-- Bottom-left: 0,568 670x340 -->
+          <img src="${photo2}" style="position:absolute;left:0;top:438px;width:670px;height:340px;object-fit:cover;">
+          <!-- Top-right: 710,160 490x245 -->
+          <img src="${photo3}" style="position:absolute;left:710px;top:30px;width:490px;height:245px;object-fit:cover;">
+          <!-- Bottom-right: 710,690 490x230 -->
+          <img src="${photo4}" style="position:absolute;left:710px;top:560px;width:490px;height:230px;object-fit:cover;">
+          <!-- White dividers -->
+          <div style="position:absolute;left:670px;top:0;width:40px;height:100%;background:#fff;"></div>
+          <div style="position:absolute;left:0;top:430px;width:670px;height:8px;background:#fff;"></div>
+          <div style="position:absolute;left:710px;top:275px;width:490px;height:285px;background:#fff;display:flex;align-items:center;justify-content:center;">
+            <div style="font-size:14px;letter-spacing:2px;color:#888;text-align:center;">LPT REALTY</div>
+          </div>
+        </div>
+        <!-- Address block -->
+        <div style="position:absolute;left:45px;top:960px;">
+          <div style="font-family:'DM Serif Display',Georgia,serif;font-size:68px;color:#111;font-weight:700;line-height:1.1;">${addr}</div>
+        </div>
+        <!-- City -->
+        <div style="position:absolute;left:0;right:0;top:1050px;text-align:center;">
+          <span style="font-size:28px;letter-spacing:4px;color:#555;font-weight:300;text-transform:uppercase;">${city}, ${listing.state || 'AR'}</span>
+        </div>
+        <!-- Website -->
+        <div style="position:absolute;left:0;right:0;bottom:30px;text-align:center;">
+          <span style="font-size:16px;letter-spacing:4px;color:#999;font-weight:300;">MAKEARKANSASHOME.COM</span>
+        </div>
+        ${brokerageBar}
+      </div>`,
   };
 
   const body = layouts[t.layout] || layouts.hero_bottom;
 
   return `<!DOCTYPE html><html><head>
     <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>*{margin:0;padding:0;box-sizing:border-box}</style>
   </head><body style="margin:0;padding:0;">${body}</body></html>`;
 }
@@ -235,105 +325,60 @@ app.post('/render-graphic', async (req, res) => {
     const template = client?.template_style || 'bold_dark';
     console.log(`[GRAPHIC] Template style: ${template}`);
 
-    // 6. Check for custom uploaded design
+    // 6. Check for custom uploaded design with AI-generated template
     const { data: customDesigns } = await sb.from('client_designs').select('*').eq('client_id', graphic.client_id).order('created_at', { ascending: false }).limit(1);
-    const hasCustomDesign = (customDesigns && customDesigns.length > 0);
+    const customDesign = (customDesigns && customDesigns.length > 0) ? customDesigns[0] : null;
     
-    if (hasCustomDesign || template === 'blk_custom' || template === 'custom_upload') {
-      console.log(`[GRAPHIC] Using custom design rendering (Sharp compositing)`);
+    if (customDesign && customDesign.template_html && template !== 'blk_custom') {
+      console.log(`[GRAPHIC] Using AI-generated custom template: ${customDesign.name}`);
       try {
-        // Get the custom design image URL
-        let designUrl = null;
-        if (hasCustomDesign) {
-          designUrl = customDesigns[0].image_url;
-        }
-        
-        if (designUrl) {
-          console.log(`[GRAPHIC] Fetching custom design: ${designUrl}`);
-          const designRes = await fetch(designUrl);
-          const designBuf = Buffer.from(await designRes.arrayBuffer());
-          
-          // Resize design to 1200x1200
-          let base = await sharp(designBuf).resize(1200, 1200, { fit: 'cover' }).png().toBuffer();
-          
-          // Download listing photos
-          const photoBuffers = [];
-          for (let i = 0; i < Math.min(photos.length, 4); i++) {
-            try {
-              const pRes = await fetch(photos[i]);
-              const pBuf = Buffer.from(await pRes.arrayBuffer());
-              photoBuffers.push(pBuf);
-            } catch (pe) { console.log(`[GRAPHIC] Photo ${i} fetch failed:`, pe.message); }
-          }
-          
-          // Composite: photos in top area, text bar at bottom
-          const composites = [];
-          
-          // Photo grid in top 60% of image (y: 80 to 800)
-          if (photoBuffers.length >= 1) {
-            const heroPhoto = await sharp(photoBuffers[0]).resize(1120, 680, { fit: 'cover' }).png().toBuffer();
-            composites.push({ input: heroPhoto, left: 40, top: 100 });
-          }
-          if (photoBuffers.length >= 4) {
-            // 4-photo grid: top-left hero, then 3 smaller
-            const p1 = await sharp(photoBuffers[0]).resize(660, 380, { fit: 'cover' }).png().toBuffer();
-            const p2 = await sharp(photoBuffers[1]).resize(460, 380, { fit: 'cover' }).png().toBuffer();
-            const p3 = await sharp(photoBuffers[2]).resize(460, 280, { fit: 'cover' }).png().toBuffer();
-            const p4 = await sharp(photoBuffers[3]).resize(660, 280, { fit: 'cover' }).png().toBuffer();
-            composites.length = 0; // Clear hero
-            composites.push({ input: p1, left: 40, top: 100 });
-            composites.push({ input: p2, left: 710, top: 100 });
-            composites.push({ input: p3, left: 710, top: 490 });
-            composites.push({ input: p4, left: 40, top: 490 });
-          }
-          
-          // Create text overlay bar
-          const graphicType = (graphic.graphic_type || 'just_listed').replace(/_/g, ' ').toUpperCase();
-          const addr = listing.street || '';
-          const city = listing.city || '';
-          const specs = `${listing.beds || '—'} BD  ·  ${listing.baths || '—'} BA  ·  ${(listing.sqft || 0).toLocaleString()} SQFT`;
-          const price = `$${(listing.price || 0).toLocaleString()}`;
-          
-          const textBar = Buffer.from(`<svg width="1200" height="280">
-            <rect x="0" y="0" width="1200" height="280" fill="rgba(0,0,0,0.75)" rx="0"/>
-            <text x="60" y="45" font-family="Arial,sans-serif" font-size="20" font-weight="bold" letter-spacing="3" fill="#C8A55C">${graphicType}</text>
-            <text x="60" y="110" font-family="Georgia,serif" font-size="58" font-weight="bold" fill="#FFFFFF">${addr}</text>
-            <text x="60" y="160" font-family="Georgia,serif" font-size="34" fill="rgba(255,255,255,0.7)">${city}, ${listing.state || ''}</text>
-            <text x="60" y="210" font-family="Arial,sans-serif" font-size="18" fill="#C8A55C">${specs}</text>
-            <text x="60" y="245" font-family="Arial,sans-serif" font-size="24" font-weight="bold" fill="#C8A55C">${price}</text>
-          </svg>`);
-          composites.push({ input: textBar, left: 0, top: 860 });
-          
-          // Brokerage bar
-          const bName = client?.brokerage || '';
-          const bLicense = client?.license_number || '';
-          const bDisclaimer = client?.brokerage_disclaimer || 'Equal Housing Opportunity';
-          const brokerBar = Buffer.from(`<svg width="1200" height="50">
-            <rect x="0" y="0" width="1200" height="50" fill="#111111"/>
-            <text x="30" y="32" font-family="Arial,sans-serif" font-size="13" fill="#cccccc">${bName}${bLicense ? ' · #' + bLicense : ''}</text>
-            <text x="1170" y="32" font-family="Arial,sans-serif" font-size="10" fill="#888888" text-anchor="end">${bDisclaimer}</text>
-          </svg>`);
-          composites.push({ input: brokerBar, left: 0, top: 1150 });
-          
-          // Composite everything
-          const finalImage = await sharp(base).composite(composites).png({ quality: 90 }).toBuffer();
-          
-          // Upload
-          const filename = `${graphic.client_id}/graphics/${graphic_id}.png`;
-          const { error: upErr } = await sb.storage.from('listing-photos').upload(filename, finalImage, { contentType: 'image/png', upsert: true });
-          if (upErr) throw new Error('Upload failed: ' + upErr.message);
-          
-          const fileUrl = `${SUPA_URL}/storage/v1/object/public/listing-photos/${filename}`;
-          await sb.from('graphics').update({ file_url: fileUrl, status: 'ready' }).eq('id', graphic_id);
-          
-          console.log(`[GRAPHIC] Custom design done! ${fileUrl}`);
-          return res.json({ success: true, file_url: fileUrl, engine: 'custom_sharp' });
-        } else {
-          console.log(`[GRAPHIC] No custom design URL found, falling back to HTML render`);
-        }
+        // Replace placeholders in the saved template HTML
+        let customHtml = customDesign.template_html;
+        customHtml = customHtml.replace(/\{\{PHOTO_1\}\}/g, photos[0] || '');
+        customHtml = customHtml.replace(/\{\{PHOTO_2\}\}/g, photos[1] || photos[0] || '');
+        customHtml = customHtml.replace(/\{\{PHOTO_3\}\}/g, photos[2] || photos[0] || '');
+        customHtml = customHtml.replace(/\{\{PHOTO_4\}\}/g, photos[3] || photos[1] || photos[0] || '');
+        customHtml = customHtml.replace(/\{\{STREET\}\}/g, listing.street || '');
+        customHtml = customHtml.replace(/\{\{CITY\}\}/g, listing.city || '');
+        customHtml = customHtml.replace(/\{\{STATE\}\}/g, listing.state || '');
+        customHtml = customHtml.replace(/\{\{BEDS\}\}/g, String(listing.beds || '—'));
+        customHtml = customHtml.replace(/\{\{BATHS\}\}/g, String(listing.baths || '—'));
+        customHtml = customHtml.replace(/\{\{SQFT\}\}/g, (listing.sqft || 0).toLocaleString());
+        customHtml = customHtml.replace(/\{\{PRICE\}\}/g, '$' + (listing.price || 0).toLocaleString());
+        customHtml = customHtml.replace(/\{\{GRAPHIC_TYPE\}\}/g, (graphic.graphic_type || 'just_listed').replace(/_/g, ' ').toUpperCase());
+        customHtml = customHtml.replace(/\{\{BROKERAGE\}\}/g, client?.brokerage || '');
+        customHtml = customHtml.replace(/\{\{BROKERAGE_LOGO\}\}/g, client?.brokerage_logo_url || '');
+        customHtml = customHtml.replace(/\{\{LICENSE\}\}/g, client?.license_number || '');
+        customHtml = customHtml.replace(/\{\{DISCLAIMER\}\}/g, client?.brokerage_disclaimer || 'Equal Housing Opportunity');
+        customHtml = customHtml.replace(/\{\{WEBSITE\}\}/g, client?.website || '');
+
+        // Render with Puppeteer
+        console.log(`[GRAPHIC] Launching Puppeteer for custom template...`);
+        const browser = await puppeteer.launch({
+          headless: 'new',
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+        });
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1200, height: 1200 });
+        await page.setContent(customHtml, { waitUntil: 'networkidle0', timeout: 30000 });
+        await page.evaluate(() => Promise.all(Array.from(document.images).map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; }))));
+        const screenshot = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 1200, height: 1200 } });
+        await browser.close();
+
+        const optimized = await sharp(screenshot).png({ quality: 90, compressionLevel: 6 }).toBuffer();
+        const filename = `${graphic.client_id}/graphics/${graphic_id}.png`;
+        const { error: upErr } = await sb.storage.from('listing-photos').upload(filename, optimized, { contentType: 'image/png', upsert: true });
+        if (upErr) throw new Error('Upload failed: ' + upErr.message);
+
+        const fileUrl = `${SUPA_URL}/storage/v1/object/public/listing-photos/${filename}`;
+        await sb.from('graphics').update({ file_url: fileUrl, status: 'ready' }).eq('id', graphic_id);
+
+        console.log(`[GRAPHIC] Custom template done! ${fileUrl}`);
+        return res.json({ success: true, file_url: fileUrl, engine: 'custom_ai_template' });
       } catch (custErr) {
-        console.error(`[GRAPHIC] Custom design error:`, custErr.message);
-        console.log(`[GRAPHIC] Falling back to HTML render`);
+        console.error(`[GRAPHIC] Custom template error:`, custErr.message);
+        console.log(`[GRAPHIC] Falling back to preset HTML render`);
       }
     }
 
