@@ -17,6 +17,9 @@ app.use(express.json({ limit: '50mb' }));
 const SUPA_URL = process.env.SUPA_URL || 'https://jdztwoaaissvauuyodfb.supabase.co';
 const SUPA_SERVICE_KEY = process.env.SUPA_SERVICE_KEY; // Use service role key for backend
 const sb = createClient(SUPA_URL, SUPA_SERVICE_KEY);
+console.log('[INIT] SUPA_URL:', SUPA_URL);
+console.log('[INIT] Service key set:', !!SUPA_SERVICE_KEY);
+console.log('[INIT] Chromium path:', process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium');
 
 // ═══════════════════════════════════════════
 // TEMPLATE DEFINITIONS (match portal exactly)
@@ -209,10 +212,12 @@ app.post('/render-graphic', async (req, res) => {
 
     // 2. Get listing
     const { data: listing } = await sb.from('listings').select('*').eq('id', graphic.listing_id).single();
+    console.log(`[GRAPHIC] Listing:`, listing ? `${listing.street}, ${listing.city}` : 'NOT FOUND');
     if (!listing) return res.status(404).json({ error: 'Listing not found' });
 
     // 3. Get client (for brokerage info and template)
     const { data: client } = await sb.from('clients').select('*').eq('id', graphic.client_id).single();
+    console.log(`[GRAPHIC] Client:`, client ? client.first_name : 'NOT FOUND');
 
     // 4. Get photos
     const { data: photoRows } = await sb.from('listing_photos').select('*').eq('listing_id', listing.id).order('created_at', { ascending: false }).limit(1);
@@ -264,13 +269,18 @@ app.post('/render-graphic', async (req, res) => {
 
     // 8. Render with Puppeteer
     console.log(`[GRAPHIC] Launching Puppeteer for template: ${template}`);
+    console.log(`[GRAPHIC] Photos found: ${photos.length}`, photos);
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
+    console.log('[GRAPHIC] Browser launched OK');
     const page = await browser.newPage();
     await page.setViewport({ width: 1200, height: 1200 });
+    console.log('[GRAPHIC] Setting page content...');
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30000 });
+    console.log('[GRAPHIC] Content loaded, waiting for images...');
     
     // Wait for images to load
     await page.evaluate(() => {
@@ -282,6 +292,7 @@ app.post('/render-graphic', async (req, res) => {
 
     const screenshot = await page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 1200, height: 1200 } });
     await browser.close();
+    console.log(`[GRAPHIC] Screenshot taken: ${screenshot.length} bytes`);
 
     // 9. Optimize with Sharp
     const optimized = await sharp(screenshot).png({ quality: 90, compressionLevel: 6 }).toBuffer();
