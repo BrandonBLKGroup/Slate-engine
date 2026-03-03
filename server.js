@@ -320,7 +320,33 @@ app.post('/render-graphic', async (req, res) => {
     const template = client?.template_style || 'bold_dark';
     console.log(`[GRAPHIC] Template style: ${template}`);
 
-    // 6. Check for custom uploaded design with AI-generated template
+    // 6. Route BLK/custom clients to Python PSD renderer
+    if (template === 'blk_custom' || template === 'custom_ai') {
+      console.log(`[GRAPHIC] Routing to BLK Python renderer`);
+      try {
+        const blkUrl = process.env.BLK_RENDERER_URL || 'https://blk-renderer-production.up.railway.app';
+        const blkRes = await fetch(`${blkUrl}/render`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ graphic_id }),
+          timeout: 120000
+        });
+        if (blkRes.ok) {
+          const blkData = await blkRes.json();
+          console.log(`[GRAPHIC] BLK renderer done: ${blkData.file_url}`);
+          return res.json({ success: true, file_url: blkData.file_url, engine: 'blk_psd' });
+        } else {
+          const errText = await blkRes.text();
+          console.error(`[GRAPHIC] BLK renderer error: ${errText}`);
+        }
+      } catch (blkErr) {
+        console.error(`[GRAPHIC] BLK renderer failed:`, blkErr.message);
+      }
+      // If BLK renderer fails, fall through to preset HTML
+      console.log(`[GRAPHIC] Falling back to preset HTML render`);
+    }
+
+    // 7. Check for custom uploaded design with AI-generated template
     const { data: customDesigns } = await sb.from('client_designs').select('*').eq('client_id', graphic.client_id).order('created_at', { ascending: false }).limit(1);
     const customDesign = (customDesigns && customDesigns.length > 0) ? customDesigns[0] : null;
     
